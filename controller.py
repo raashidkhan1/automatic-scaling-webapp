@@ -31,9 +31,9 @@ def monitorLB(cmd):
 def autoScaler():
     print("Auto-scaling instances")
 
-def createThreadInstance(targetfunc):
+def createThreadInstance(targetfunc, cmd=''):
     logging.info("starting thread")
-    thread = threading.Thread(target=targetfunc, args=())
+    thread = threading.Thread(target=targetfunc, args=cmd)
     thread.start()
     logging.info("thread started")
     return thread
@@ -47,5 +47,5 @@ if __name__ == "main":
 
     cmd = l.haproxy_stats_cmd
     # create thread for monitorLB
-    monitorThread = createThreadInstance(monitorLB)
+    monitorThread = createThreadInstance(monitorLB, cmd)
     autoScalar = createThreadInstance(autoScaler)
