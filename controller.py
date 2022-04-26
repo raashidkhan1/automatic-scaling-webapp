@@ -7,7 +7,7 @@ HEADER_FIELD_NAMES = 'pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,
 current_stats = None
 
 # command line argument for the script
-# python controller --haproxy_stats_cmd "echo 'show stat' | nc -U /var/run/haproxy/haproxy.sock | grep 'backend-https,BACKEND'"
+# python3 controller.py --haproxy_stats_cmd "echo 'show stat' | nc -U /var/run/haproxy/haproxy.sock | grep 'backend-https,BACKEND'"
 
 def parse_haproxy_stats(stat_output):
     l = stat_output.split(',')
@@ -33,12 +33,12 @@ def autoScaler():
 
 def createThreadInstance(targetfunc, cmd=''):
     logging.info("starting thread")
-    thread = threading.Thread(target=targetfunc, args=cmd)
+    thread = threading.Thread(target=targetfunc, args=(cmd,))
     thread.start()
     logging.info("thread started")
     return thread
 
-if __name__ == "main":
+def main():
     print('Scaling Controller started...')
     parser = argparse.ArgumentParser()
     parser.add_argument('--haproxy_stats_cmd', default = '', \
@@ -46,6 +46,11 @@ if __name__ == "main":
     l = parser.parse_args()
 
     cmd = l.haproxy_stats_cmd
+    print(type(cmd))
     # create thread for monitorLB
     monitorThread = createThreadInstance(monitorLB, cmd)
     autoScalar = createThreadInstance(autoScaler)
+    autoScalar.join()
+
+main()
+
