@@ -2,10 +2,7 @@
 Cloud Computing LAB assignment 1
 
 Using the script (Not tested yet) -
-Run
-```
-python controller --haproxy_stats_cmd "echo 'show stat' | nc -U /var/run/haproxy/haproxy.sock | grep 'backend-https,BACKEND'"
-```
+Run instructions in the controller file
 Initial setup Code-
 1) controller.py - to run the monitoring and autoscaling
 2) objst.py - provided web api for backend
