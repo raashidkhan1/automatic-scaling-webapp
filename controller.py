@@ -5,6 +5,10 @@ import csv
 from time import sleep
 import urllib.request
 import codecs
+from podman import PodmanClient
+from subprocess import Popen
+import subprocess
+
 
 '''
 Before running this script:
@@ -89,6 +93,55 @@ def autoScaler(stats):
     while True:
         print(current_stats)
         sleep(2)
+    for webserver in current_stats:   # we check the status for each webserver in our HAproxy config file
+        if webserver["rtime"] > 10:  # scale up if response time > 10 ms
+            z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
+                                      volumes={'objecttt': {'bind': "/objects"}})
+            x = client.containers.get(z.name)
+            if x.status == "running":
+                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+        return IPcont
+
+        if webserver['econ'] > 50:  # scale up
+            z = client.containers.run('testcontainer', detach=True, auto_remove=True,
+                                      volumes={'objecttt': {'bind': "/objects"}})
+            x = client.containers.get(z.name)
+            if x.status == "running":
+                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+        return IPcont
+
+        if webserver['qcur'] > 50:  # scale up
+            z = client.containers.run('testcontainer', detach=True, auto_remove=True,
+                                      volumes={'objecttt': {'bind': "/objects"}})
+            x = client.containers.get(z.name)
+            if x.status == "running":
+                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+        return IPcont
+
+        if webserver['qcur'] < 10:  # scale down
+            for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                x = client.containers.get(c.name)
+            # print(x)
+            if x.status == "running":
+                x.stop()
+                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+        return  IPcont
+
+
+def copy_to(src, dst):  # to copy the config file from controller to HAproxy container
+    name, dst = dst.split(':')
+    container = client.containers.get(name)
+    os.chdir(os.path.dirname(src))
+    srcname = os.path.basename(src)
+    tar = tarfile.open(src + '.tar', mode='w')
+    try:
+        tar.add(srcname)
+    finally:
+        tar.close()
+
+    data = open(src + '.tar', 'rb').read()
+    container.put_archive(os.path.dirname(dst), data)
+
 
 # main function for scaling controller
 def main():
@@ -106,6 +159,7 @@ def main():
     autoScalar = createThreadInstance(autoScaler, current_stats)
     # wait for autoscalar to finish before monitoring again
     autoScalar.join()
+    copy_to('/haproxy.cfg', 'myhaproxy:/etc/haproxy/haproxy.cfg')  # to copy config file
 
 main()
 
