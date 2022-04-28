@@ -38,7 +38,7 @@ def parse_haproxy_stats(stat_output):
         i = i + 1
     return haproxy_dict  
 
-# function to create a new haproxy.cfg file in current directory as /config/haproxy.cfg
+# function to create a new haproxy.cfg file in current directory as haproxy.cfg using template from ./config/haproxy.cfg
 # To be used for updating active backend IPs and copy this file inside container
 # usage: update_haproxy_cfg(['127.0.0.1:5000', '127.0.0.2:5000'])
 def update_haproxy_cfg(ip_list=[]):
@@ -49,12 +49,12 @@ def update_haproxy_cfg(ip_list=[]):
         server = "server web"+str(i)+" "+ip+" check"
         i += 1
         appendContents += "\n    "+server+"\n"
-    readFile = open("haproxy.cfg", "r")
+    readFile = open("./config/haproxy.cfg", "r")
     if readFile.mode == 'r':
         contents = readFile.read()
         contents += appendContents
     # print(contents)
-    writeFile = open("./config/haproxy.cfg", "w+")
+    writeFile = open("./haproxy.cfg", "w+")
     writeFile.write(contents)
     writeFile.close()
 
