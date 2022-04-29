@@ -8,6 +8,8 @@ import codecs
 from podman import PodmanClient
 from subprocess import Popen
 import subprocess
+import os
+import tarfile
 
 
 '''
@@ -24,7 +26,7 @@ Run commands manually for
 current_stats = []
 
 HEADER_FIELD_NAMES = 'pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,agent_status,agent_code,agent_duration,check_desc,agent_desc,check_rise,check_fall,check_health,agent_rise,agent_fall,agent_health,addr,cookie,mode,algo,conn_rate,conn_rate_max,conn_tot,intercepted,dcon,dses,wrew,connect,reuse,cache_lookups,cache_hits,srv_icur,src_ilim,qtime_max,ctime_max,rtime_max,ttime_max,'
-
+client = PodmanClient(base_url="unix:///run/podman/podman.sock")
 # function to parse output from CSV into a dictionary
 def parse_haproxy_stats(stat_output):
     l = stat_output
@@ -36,7 +38,7 @@ def parse_haproxy_stats(stat_output):
         field_name = field_name_list[i]
         haproxy_dict[field_name] = item
         i = i + 1
-    return haproxy_dict  
+    return haproxy_dict
 
 # function to create a new haproxy.cfg file in current directory as haproxy.cfg using template from ./config/haproxy.cfg
 # To be used for updating active backend IPs and copy this file inside container
@@ -93,39 +95,56 @@ def autoScaler(stats):
     while True:
         print(current_stats)
         sleep(2)
-    for webserver in current_stats:   # we check the status for each webserver in our HAproxy config file
+    for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
         if webserver["rtime"] > 10:  # scale up if response time > 10 ms
             z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
                                       volumes={'objecttt': {'bind': "/objects"}})
             x = client.containers.get(z.name)
             if x.status == "running":
                 IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        return IPcont
+        break
 
-        if webserver['econ'] > 50:  # scale up
+        if webserver['econ'] > 50:  # scale up if number of requests that encountered an error trying to connect to a backend server
             z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                       volumes={'objecttt': {'bind': "/objects"}})
             x = client.containers.get(z.name)
             if x.status == "running":
                 IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        return IPcont
+        break
 
-        if webserver['qcur'] > 50:  # scale up
+        if webserver['qcur'] > 50:  # scale up  if current queued requests bigger than 50
             z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                       volumes={'objecttt': {'bind': "/objects"}})
             x = client.containers.get(z.name)
             if x.status == "running":
                 IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        return IPcont
+        break
 
-        if webserver['qcur'] < 10:  # scale down
+        if webserver['qcur'] < 10:  # scale down   print list outside for loop
             for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                 x = client.containers.get(c.name)
             # print(x)
             if x.status == "running":
                 x.stop()
-                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        return  IPcont
+                IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+
+        break
+
+    # for getting a list of running containers
+    for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+        x = client.containers.get(c.name)
+        if x.status == "running":
+         IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+         IP_list.append(IPconts)
+    print(IP_list)
+    #------------------------ updating the config file
+    update_haproxy_cfg(IP_list)
+    #--------------------------copy the config file to the HAproxy container
+    copy_to('/haproxy.cfg','myhaproxy:/etc/haproxy/haproxy.cfg')
+    #-------------------------- restart Haproxy
+    #restart haproxy srevice
+    #------------------------- wait
+    sleep(10)
 
 
 def copy_to(src, dst):  # to copy the config file from controller to HAproxy container
@@ -162,4 +181,3 @@ def main():
     copy_to('/haproxy.cfg', 'myhaproxy:/etc/haproxy/haproxy.cfg')  # to copy config file
 
 main()
-
