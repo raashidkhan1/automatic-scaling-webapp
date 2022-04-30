@@ -24,6 +24,7 @@ Run commands manually for
 
 current_stats = []
 
+# metrics for calibration
 MAX_RTIME = 30
 MAX_ECON = 5
 MAX_QCUR = 5
@@ -34,9 +35,11 @@ SRC_HAPROXYCFG = "/haproxy.cfg"
 DST_HAPROXY = "myhaproxy:/etc/haproxy/haproxy.cfg"
 
 # reload haproxy lb command
-RELOAD_HAPROXY_CMD = "podman kill -s HUP myhaproxy"
-
+RELOAD_HAPROXY_CMD = "podman exec -d myhaproxy haproxy -f /etc/haproxy/haproxy.cfg"
+# headers
+HEADER_FILE_NAMES_COUNT = 95
 HEADER_FIELD_NAMES = 'pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,agent_status,agent_code,agent_duration,check_desc,agent_desc,check_rise,check_fall,check_health,agent_rise,agent_fall,agent_health,addr,cookie,mode,algo,conn_rate,conn_rate_max,conn_tot,intercepted,dcon,dses,wrew,connect,reuse,cache_lookups,cache_hits,srv_icur,src_ilim,qtime_max,ctime_max,rtime_max,ttime_max,'
+#initialize PodmanClient
 client = PodmanClient(base_url="unix:///run/podman/podman.sock")
 # function to parse output from CSV into a dictionary
 def parse_haproxy_stats(stat_output):
@@ -84,6 +87,7 @@ def createThread(targetfunc, cmd=''):
 # monitors LB backend to fetch stats in CSV format using the IP
 # usage : monitorLB('127.0.0.1:9999')
 def monitorLB(ip):
+    lock = threading.RLock
     print("Monitoring LB")
     global current_stats
     # print(current_stats)
@@ -94,11 +98,12 @@ def monitorLB(ip):
         cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
         backend_stats = ''
         for row in cr:
-            if len(row) == 95:
+            if len(row) == HEADER_FILE_NAMES_COUNT:
                 if row[0].startswith('web') & row[1].startswith('web'):
                     backend_stats = row
-                    current_stats.append(parse_haproxy_stats(backend_stats))
-        print(current_stats[0]['rtime'], "monitor")
+                    with lock:
+                        current_stats.append(parse_haproxy_stats(backend_stats))
+        # print(current_stats[0]['rtime'], "monitor")
         time.sleep(2)
 
 def perform_reset():
