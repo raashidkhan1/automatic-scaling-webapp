@@ -67,7 +67,7 @@ def update_haproxy_cfg(ip_list=[]):
         server = "server web"+str(i)+" "+ip+" check"
         i += 1
         appendContents += "\n    "+server+"\n"
-    readFile = open("./config/haproxy.cfg", "r")
+    readFile = open("./template.cfg", "r")
     if readFile.mode == 'r':
         contents = readFile.read()
         contents += appendContents
@@ -134,40 +134,49 @@ def autoScaler(stats):
     print("Auto-scaling instances")
     while True:
         for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
+            print("Checking existing webserver", webserver['svname'])
             if int(webserver["rtime"]) > MAX_RTIME:  # scale up if response time > 10 ms
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
                                         volumes={'objecttt': {'bind': "/objects"}})
+                time.sleep(5)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                    print('Scaling up with', IPcont)
                 perform_reset()
                 break
 
             if int(webserver['econ']) > MAX_ECON:  # scale up if number of requests that encountered an error trying to connect to a backend server
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
+                time.sleep(5)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                    print('Scaling up with', IPcont)
                 perform_reset()
                 break
 
             if int(webserver['qcur']) > MAX_QCUR:  # scale up  if current queued requests bigger than 50
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
+                time.sleep(5)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                    print('Scaling up with', IPcont)
                 perform_reset()
                 break
 
             if int(webserver['qcur']) < MIN_QCUR:  # scale down   print list outside for loop
                 for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                     x = client.containers.get(c.name)
-                # print(x)
+                    break
                 if x.status == "running":
                     x.stop()
+                    time.sleep(5)
                     IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                    print('Scaling down', IPconts)
                 perform_reset()
                 break
         time.sleep(30)
