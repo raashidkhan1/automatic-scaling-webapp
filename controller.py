@@ -76,6 +76,7 @@ def update_haproxy_cfg(ip_list=[]):
 def createThread(targetfunc, cmd=''):
     logging.info("starting thread")
     thread = threading.Thread(target=targetfunc, args=(cmd,))
+    thread.setDaemon(True)
     thread.start()
     logging.info("thread started")
     return thread
@@ -89,20 +90,16 @@ def monitorLB(ip):
     csvOutputURL = "http://"+ip+"/stats;csv"
     # print('csvOutput', csvOutputURL)
     while True:
-        HOST_UP  = True if os.system("ping -c 2 " + ip+"/stats") is 0 else False
-        if HOST_UP:
-            response = urllib.request.urlopen(csvOutputURL)
-            cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
-            backend_stats = ''
-            for row in cr:
-                if len(row) == 95:
-                    if row[0].startswith('web') & row[1].startswith('web'):
-                        backend_stats = row
-                        current_stats.append(parse_haproxy_stats(backend_stats))
-            # print(current_stats[0]['rtime'])
-            time.sleep(2)
-        else:
-            pass
+        response = urllib.request.urlopen(csvOutputURL)
+        cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
+        backend_stats = ''
+        for row in cr:
+            if len(row) == 95:
+                if row[0].startswith('web') & row[1].startswith('web'):
+                    backend_stats = row
+                    current_stats.append(parse_haproxy_stats(backend_stats))
+        print(current_stats[0]['rtime'], "monitor")
+        time.sleep(2)
 
 def perform_reset():
     IP_list = []
@@ -130,7 +127,7 @@ def autoScaler(stats):
     print("Auto-scaling instances")
     while True:
         for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
-            if webserver["rtime"] > MAX_RTIME:  # scale up if response time > 10 ms
+            if int(webserver["rtime"]) > MAX_RTIME:  # scale up if response time > 10 ms
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
                                         volumes={'objecttt': {'bind': "/objects"}})
                 x = client.containers.get(z.name)
@@ -139,7 +136,7 @@ def autoScaler(stats):
                 perform_reset()
                 break
 
-            if webserver['econ'] > MAX_ECON:  # scale up if number of requests that encountered an error trying to connect to a backend server
+            if int(webserver['econ']) > MAX_ECON:  # scale up if number of requests that encountered an error trying to connect to a backend server
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
                 x = client.containers.get(z.name)
@@ -148,7 +145,7 @@ def autoScaler(stats):
                 perform_reset()
                 break
 
-            if webserver['qcur'] > MAX_QCUR:  # scale up  if current queued requests bigger than 50
+            if int(webserver['qcur']) > MAX_QCUR:  # scale up  if current queued requests bigger than 50
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
                 x = client.containers.get(z.name)
@@ -157,7 +154,7 @@ def autoScaler(stats):
                 perform_reset()
                 break
 
-            if webserver['qcur'] < MIN_QCUR:  # scale down   print list outside for loop
+            if int(webserver['qcur']) < MIN_QCUR:  # scale down   print list outside for loop
                 for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                     x = client.containers.get(c.name)
                 # print(x)
@@ -194,7 +191,11 @@ def main():
     cmd = l.haproxy_ip
     # create thread for monitorLB
     monitorThread = createThread(monitorLB, cmd)
+    #wait for monitoring thread to start and update current_stats
+    time.sleep(1)
     #create thread for autoScalar
-    autoScalar = createThread(autoScaler, current_stats)
+    autoScalarThread = createThread(autoScaler)
+    monitorThread.join()
+    autoScalarThread.join()
 
 main()
