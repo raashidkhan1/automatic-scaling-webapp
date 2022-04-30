@@ -92,59 +92,57 @@ def monitorLB(ip):
 # function to start stop instances based on metrics from monitorLB
 def autoScaler(stats):
     print("Auto-scaling instances")
+    IP_list = []
     while True:
-        print(current_stats)
-        sleep(2)
-    for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
-        if webserver["rtime"] > 10:  # scale up if response time > 10 ms
-            z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
-                                      volumes={'objecttt': {'bind': "/objects"}})
-            x = client.containers.get(z.name)
-            if x.status == "running":
-                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        break
+        for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
+            if webserver["rtime"] > 10:  # scale up if response time > 10 ms
+                z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for stoing objects
+                                        volumes={'objecttt': {'bind': "/objects"}})
+                x = client.containers.get(z.name)
+                if x.status == "running":
+                    IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                break
 
-        if webserver['econ'] > 50:  # scale up if number of requests that encountered an error trying to connect to a backend server
-            z = client.containers.run('testcontainer', detach=True, auto_remove=True,
-                                      volumes={'objecttt': {'bind': "/objects"}})
-            x = client.containers.get(z.name)
-            if x.status == "running":
-                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        break
+            if webserver['econ'] > 50:  # scale up if number of requests that encountered an error trying to connect to a backend server
+                z = client.containers.run('testcontainer', detach=True, auto_remove=True,
+                                        volumes={'objecttt': {'bind': "/objects"}})
+                x = client.containers.get(z.name)
+                if x.status == "running":
+                    IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                break
 
-        if webserver['qcur'] > 50:  # scale up  if current queued requests bigger than 50
-            z = client.containers.run('testcontainer', detach=True, auto_remove=True,
-                                      volumes={'objecttt': {'bind': "/objects"}})
-            x = client.containers.get(z.name)
-            if x.status == "running":
-                IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-        break
+            if webserver['qcur'] > 50:  # scale up  if current queued requests bigger than 50
+                z = client.containers.run('testcontainer', detach=True, auto_remove=True,
+                                        volumes={'objecttt': {'bind': "/objects"}})
+                x = client.containers.get(z.name)
+                if x.status == "running":
+                    IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                break
 
-        if webserver['qcur'] < 10:  # scale down   print list outside for loop
-            for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                x = client.containers.get(c.name)
-            # print(x)
+            if webserver['qcur'] < 10:  # scale down   print list outside for loop
+                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                    x = client.containers.get(c.name)
+                # print(x)
+                if x.status == "running":
+                    x.stop()
+                    IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                    break
+
+        # for getting a list of running containers
+        for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+            x = client.containers.get(c.name)
             if x.status == "running":
-                x.stop()
                 IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-
-        break
-
-    # for getting a list of running containers
-    for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-        x = client.containers.get(c.name)
-        if x.status == "running":
-         IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-         IP_list.append(IPconts)
-    print(IP_list)
-    #------------------------ updating the config file
-    update_haproxy_cfg(IP_list)
-    #--------------------------copy the config file to the HAproxy container
-    copy_to('/haproxy.cfg','myhaproxy:/etc/haproxy/haproxy.cfg')
-    #-------------------------- restart Haproxy
-    #restart haproxy srevice
-    #------------------------- wait
-    sleep(10)
+                IP_list.append(IPconts)
+                print(IP_list)
+        #------------------------ updating the config file
+        update_haproxy_cfg(IP_list)
+        #--------------------------copy the config file to the HAproxy container
+        copy_to('/haproxy.cfg','myhaproxy:/etc/haproxy/haproxy.cfg')
+        #-------------------------- restart Haproxy
+        #restart haproxy service
+        #------------------------- wait
+        sleep(10)
 
 
 def copy_to(src, dst):  # to copy the config file from controller to HAproxy container
