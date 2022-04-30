@@ -87,7 +87,6 @@ def createThread(targetfunc, cmd=''):
 # monitors LB backend to fetch stats in CSV format using the IP
 # usage : monitorLB('127.0.0.1:9999')
 def monitorLB(ip):
-    lock = threading.RLock
     print("Monitoring LB")
     global current_stats
     # print(current_stats)
@@ -98,12 +97,10 @@ def monitorLB(ip):
         cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
         backend_stats = ''
         for row in cr:
-            if len(row) == HEADER_FILE_NAMES_COUNT:
-                if row[0].startswith('web') & row[1].startswith('web'):
-                    backend_stats = row
-                    with lock:
-                        current_stats.append(parse_haproxy_stats(backend_stats))
-        # print(current_stats[0]['rtime'], "monitor")
+            if row[0].startswith('web') & row[1].startswith('web'):
+                backend_stats = row
+                current_stats.append(parse_haproxy_stats(backend_stats))
+        # print(current_stats[0]['svname'], "monitor")
         time.sleep(2)
 
 def perform_reset():
@@ -168,6 +165,7 @@ def autoScaler(stats):
                     IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
                 perform_reset()
                 break
+        time.sleep(1)
 
 
 def copy_to(src, dst):  # to copy the config file from controller to HAproxy container
