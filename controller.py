@@ -24,10 +24,10 @@ Run commands manually for
 
 current_stats = []
 
-MAX_RTIME = 10
-MAX_ECON = 50
-MAX_QCUR = 50
-MIN_QCUR = 10
+MAX_RTIME = 30
+MAX_ECON = 5
+MAX_QCUR = 5
+MIN_QCUR = 0
 
 # src and dst for haproxy
 SRC_HAPROXYCFG = "/haproxy.cfg"
