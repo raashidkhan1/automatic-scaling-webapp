@@ -36,6 +36,8 @@ DST_HAPROXY = "myhaproxy:/etc/haproxy/haproxy.cfg"
 
 # reload haproxy lb command
 RELOAD_HAPROXY_CMD = "podman exec -d myhaproxy haproxy -f /etc/haproxy/haproxy.cfg"
+# kill all the haproxy process
+KILL_ALL_HAPROXY = "podman exec myhaproxy killall haproxy"
 # headers
 HEADER_FILE_NAMES_COUNT = 95
 HEADER_FIELD_NAMES = 'pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,agent_status,agent_code,agent_duration,check_desc,agent_desc,check_rise,check_fall,check_health,agent_rise,agent_fall,agent_health,addr,cookie,mode,algo,conn_rate,conn_rate_max,conn_tot,intercepted,dcon,dses,wrew,connect,reuse,cache_lookups,cache_hits,srv_icur,src_ilim,qtime_max,ctime_max,rtime_max,ttime_max,eint,idle_conn_cur,safe_conn_cur,used_conn_cur,need_conn_est,uweight,agg_server_check_status,-,ssl_sess,ssl_reused_sess,ssl_failed_handshake,h2_headers_rcvd,h2_data_rcvd,h2_settings_rcvd,h2_rst_stream_rcvd,h2_goaway_rcvd,h2_detected_conn_protocol_errors,h2_detected_strm_protocol_errors,h2_rst_stream_resp,h2_goaway_resp,h2_open_connections,h2_backend_open_streams,h2_total_connections,h2_backend_total_streams,'
@@ -118,6 +120,9 @@ def perform_reset():
     Event().wait(2)
     copy_to(SRC_HAPROXYCFG,DST_HAPROXY)
     #-------------------------- restart Haproxy
+    Event().wait(5)
+    #kill existing reload processes
+    os.system(KILL_ALL_HAPROXY)
     Event().wait(5)
     #restart haproxy service
     os.system(RELOAD_HAPROXY_CMD)
