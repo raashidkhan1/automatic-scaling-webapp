@@ -63,7 +63,7 @@ def update_haproxy_cfg(ip_list=[]):
     contents = ""
     i=1
     for ip in ip_list:
-        server = "server web"+str(i)+" "+ip+" check"
+        server = "server web"+str(i)+" "+ip+":5000 check"
         i += 1
         appendContents += "\n    "+server+"\n"
     readFile = open("./template.cfg", "r")
