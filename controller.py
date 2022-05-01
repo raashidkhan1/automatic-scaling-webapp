@@ -25,7 +25,7 @@ Run commands manually for
 current_stats = []
 
 # metrics for calibration
-MAX_RTIME = 30
+MAX_RTIME = 100 # in ms
 MAX_ECON = 5
 MAX_QCUR = 5
 MIN_QCUR = 1
@@ -105,6 +105,7 @@ def monitorLB(ip):
         except Exception as e:
             print(e)
         # print(current_stats[0]['svname'], "monitor")
+        # wait for stats to update based on number of requests
         time.sleep(10)
 
 def perform_reset():
@@ -128,10 +129,12 @@ def perform_reset():
     #kill existing reload processes
     print("Killing all haproxy services")
     os.system(KILL_ALL_HAPROXY)
+    # give enough time to kill before reloading
     Event().wait(5)
     #restart haproxy service
     print("Reloading HAproxy")
     os.system(RELOAD_HAPROXY_CMD)
+    # give enough time to reload
     Event().wait(10)
     print("Reloaded")
 
@@ -145,7 +148,7 @@ def autoScaler(stats):
             if int(webserver["rtime"]) > MAX_RTIME:  # scale up 
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,   # running  a container with predefined image and do the mounting for storing objects
                                         volumes={'objecttt': {'bind': "/objects"}})
-                time.sleep(5)
+                Event.wait(2)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
@@ -156,7 +159,7 @@ def autoScaler(stats):
             if int(webserver['econ']) > MAX_ECON:  # scale up if number of requests that encountered an error trying to connect to a backend server
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
-                time.sleep(5)
+                Event.wait(2)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
@@ -167,59 +170,41 @@ def autoScaler(stats):
             if int(webserver['qcur']) > MAX_QCUR:  # scale up 
                 z = client.containers.run('testcontainer', detach=True, auto_remove=True,
                                         volumes={'objecttt': {'bind': "/objects"}})
-                time.sleep(5)
+                Event.wait(2)
                 x = client.containers.get(z.name)
                 if x.status == "running":
                     IPcont = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
                     print('MAX_QCUR reached Scaling up with', IPcont)
                 perform_reset()
                 break
-
-            if int(webserver['qcur']) < MIN_QCUR:  # scale down 
-                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                    x = client.containers.get(c.name)
+            
+            #perform downscaling only when the available number of containers is more than 1
+            if len(current_stats) > 1:
+                if int(webserver['qcur']) < MIN_QCUR:  # scale down if there are no requests in queue
+                    for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                        x = client.containers.get(c.name)
+                        break
+                    if x.status == "running":
+                        x.stop()
+                        Event.wait(2)
+                        IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                        print('MIN_QCUR reached Scaling down', IPconts)
+                    perform_reset()
                     break
-                if x.status == "running":
-                    x.stop()
-                    time.sleep(5)
-                    IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-                    print('MIN_QCUR reached Scaling down', IPconts)
-                perform_reset()
-                break
 
-            if int(webserver['bin']) == 0 and int(webserver['bout']) == 0:  # scale down
-                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                    x = client.containers.get(c.name)
+                if int(webserver['bin']) == 0 and int(webserver['bout']) == 0:  # scale down
+                    for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                        x = client.containers.get(c.name)
+                        break
+                    if x.status == "running":
+                        x.stop()
+                        Event.wait(2)
+                        IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                        print('bin is zero reached Scaling down', IPconts)
+                    perform_reset()
                     break
-                if x.status == "running":
-                    x.stop()
-                    time.sleep(5)
-                    IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-                    print('bin is zero reached Scaling down', IPconts)
-                perform_reset()
-                break
-
-            # if webserver['status'] == 'DOWN': # restart if a container
-            #     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-            #         if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']:  # addr: address:port
-            #                 c.restart()
-            #                 time.sleep(5)
-            #                 IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-            #                 print('Container with IP',IPconts,'is being restarted')
-            #         perform_reset()
-            #         break
-            # #lbtot: total number of times a server was selected,  for newsessions, . The server counter is the number of times that server was selected which is the same of cumulative number of sessions 'stot' and 'connect'
-            # if webserver['lbtot'] == 0:   # we have to wait again
-            #     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-            #         if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']: # to get the correct container from podman
-            #             c.stop()
-            #             time.sleep(5)
-            #             IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-            #             print('Container with IP',IPconts,'has been stopeed as its never been used for the last 2 minutes')
-            #         perform_reset()
-            #         break
-
-        time.sleep(30)
+        # wait for some time before rechecking the containers 
+        time.sleep(10)
 
 
 def copy_to(src, dst):  # to copy the config file from controller to HAproxy container
