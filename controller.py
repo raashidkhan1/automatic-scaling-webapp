@@ -23,13 +23,12 @@ Run commands manually for
 '''
 
 current_stats = []
-
 # metrics for calibration
 MAX_RTIME = 300 # in ms
 MAX_ECON = 5
 MAX_QCUR = 5
 MIN_QCUR = 1
-
+containerInstance = None
 # src and dst for haproxy
 SRC_HAPROXYCFG = "/haproxy.cfg"
 DST_HAPROXY = "myhaproxy:/etc/haproxy/haproxy.cfg"
@@ -142,6 +141,7 @@ def perform_reset():
 # function to start stop instances based on metrics from monitorLB
 def autoScaler(stats):
     print("Auto-scaling instances")
+    global containerInstance
     while True:
         for webserver in current_stats:   # we check the metrics for each webserver in our HAproxy config file
             print("Checking existing webserver", webserver['svname'])
@@ -182,20 +182,22 @@ def autoScaler(stats):
             if len(current_stats) > 1:
                 if int(webserver['qcur']) < MIN_QCUR:  # scale down if there are no requests in queue
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                        x = client.containers.get(c.name)
-                    if x.status == "running":
-                        x.stop()
+                        containerInstance = client.containers.get(c.name)
+                        break
+                    if containerInstance.status == "running":
+                        containerInstance.stop()
                         Event.wait(2)
-                        IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                        IPconts = containerInstance.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
                         print('MIN_QCUR reached Scaling down', IPconts)
                     perform_reset()
                     break
 
                 if int(webserver['bin']) == 0 and int(webserver['bout']) == 0:  # scale down
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                        y = client.containers.get(c.name)
-                    if y.status == "running":
-                        y.stop()
+                        containerInstance = client.containers.get(c.name)
+                        break
+                    if containerInstance.status == "running":
+                        containerInstance.stop()
                         Event.wait(2)
                         IPconts = y.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
                         print('bin is zero reached Scaling down', IPconts)
