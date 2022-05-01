@@ -184,7 +184,7 @@ def autoScaler(stats):
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                         containerInstance = client.containers.get(c.name)
                         break
-                    if containerInstance.status == "running":
+                    if containerInstance!=None & containerInstance.status == "running":
                         containerInstance.stop()
                         Event.wait(2)
                         IPconts = containerInstance.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
@@ -196,7 +196,7 @@ def autoScaler(stats):
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                         containerInstance = client.containers.get(c.name)
                         break
-                    if containerInstance.status == "running":
+                    if containerInstance!=None & containerInstance.status == "running":
                         containerInstance.stop()
                         Event.wait(2)
                         IPconts = y.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
