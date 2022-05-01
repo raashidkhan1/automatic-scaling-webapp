@@ -25,7 +25,7 @@ Run commands manually for
 current_stats = []
 
 # metrics for calibration
-MAX_RTIME = 100 # in ms
+MAX_RTIME = 300 # in ms
 MAX_ECON = 5
 MAX_QCUR = 5
 MIN_QCUR = 1
