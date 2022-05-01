@@ -107,7 +107,7 @@ def monitorLB(ip):
 
 def perform_reset():
     IP_list = []
-    # for getting a list of running containers
+    # for getting a list of running webservers containers
     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
         x = client.containers.get(c.name)
         if x.status == "running":
@@ -179,6 +179,27 @@ def autoScaler(stats):
                     print('Scaling down', IPconts)
                 perform_reset()
                 break
+
+            if webserver['status'] == 'DOWN':
+                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                    if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']:  # addr: address:port
+                            c.restart()
+                            time.sleep(5)
+                            IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                            print('Container with IP',IPconts,'is being restarted')
+                    perform_reset()
+                    break
+                                                                    #lbtot: total number of times a server was selected,  for newsessions, . The server counter is the number of times that server was selected which is the same of cumulative number of sessions 'stot' and 'connect'
+            if webserver['lbtot'] == 0:   # we have to wait again
+                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+                    if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']: # to get the correct container from podman
+                        c.stop()
+                        time.sleep(5)
+                        IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                        print('Container with IP',IPconts,'has been stopeed as its never been used for the last 2 minutes')
+                    perform_reset()
+                    break
+
         time.sleep(30)
 
 
