@@ -28,7 +28,7 @@ current_stats = []
 MAX_RTIME = 30
 MAX_ECON = 5
 MAX_QCUR = 5
-MIN_QCUR = 0
+MIN_QCUR = 1
 
 # src and dst for haproxy
 SRC_HAPROXYCFG = "/haproxy.cfg"
@@ -39,7 +39,6 @@ RELOAD_HAPROXY_CMD = "podman exec -d myhaproxy haproxy -f /etc/haproxy/haproxy.c
 # kill all the haproxy process
 KILL_ALL_HAPROXY = "podman exec myhaproxy killall haproxy"
 # headers
-HEADER_FILE_NAMES_COUNT = 95
 HEADER_FIELD_NAMES = 'pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,agent_status,agent_code,agent_duration,check_desc,agent_desc,check_rise,check_fall,check_health,agent_rise,agent_fall,agent_health,addr,cookie,mode,algo,conn_rate,conn_rate_max,conn_tot,intercepted,dcon,dses,wrew,connect,reuse,cache_lookups,cache_hits,srv_icur,src_ilim,qtime_max,ctime_max,rtime_max,ttime_max,eint,idle_conn_cur,safe_conn_cur,used_conn_cur,need_conn_est,uweight,agg_server_check_status,-,ssl_sess,ssl_reused_sess,ssl_failed_handshake,h2_headers_rcvd,h2_data_rcvd,h2_settings_rcvd,h2_rst_stream_rcvd,h2_goaway_rcvd,h2_detected_conn_protocol_errors,h2_detected_strm_protocol_errors,h2_rst_stream_resp,h2_goaway_resp,h2_open_connections,h2_backend_open_streams,h2_total_connections,h2_backend_total_streams,'
 #initialize PodmanClient
 client = PodmanClient(base_url="unix:///run/podman/podman.sock")
@@ -95,13 +94,16 @@ def monitorLB(ip):
     csvOutputURL = "http://"+ip+"/stats;csv"
     # print('csvOutput', csvOutputURL)
     while True:
-        response = urllib.request.urlopen(csvOutputURL)
-        cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
-        backend_stats = ''
-        for row in cr:
-            if row[0].startswith('web') & row[1].startswith('web'):
-                backend_stats = row
-                current_stats.append(parse_haproxy_stats(backend_stats))
+        try:
+            response = urllib.request.urlopen(csvOutputURL)
+            cr = csv.reader(codecs.iterdecode(response, 'utf-8'))
+            backend_stats = ''
+            for row in cr:
+                if row[0].startswith('web') & row[1].startswith('web'):
+                    backend_stats = row
+                    current_stats.append(parse_haproxy_stats(backend_stats))
+        except Exception as e:
+            print(e)
         # print(current_stats[0]['svname'], "monitor")
         time.sleep(10)
 
@@ -118,15 +120,20 @@ def perform_reset():
     update_haproxy_cfg(IP_list)
     #--------------------------copy the config file to the HAproxy container
     Event().wait(2)
+    print("Copying HAproxy from", SRC_HAPROXYCFG, "to", DST_HAPROXY)
     copy_to(SRC_HAPROXYCFG,DST_HAPROXY)
     #-------------------------- restart Haproxy
     Event().wait(5)
+    print("Copied")
     #kill existing reload processes
+    print("Killing all haproxy services")
     os.system(KILL_ALL_HAPROXY)
     Event().wait(5)
     #restart haproxy service
+    print("Reloading HAproxy")
     os.system(RELOAD_HAPROXY_CMD)
     Event().wait(10)
+    print("Reloaded")
 
 
 # function to start stop instances based on metrics from monitorLB
@@ -180,25 +187,25 @@ def autoScaler(stats):
                 perform_reset()
                 break
 
-            if webserver['status'] == 'DOWN':
-                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                    if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']:  # addr: address:port
-                            c.restart()
-                            time.sleep(5)
-                            IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-                            print('Container with IP',IPconts,'is being restarted')
-                    perform_reset()
-                    break
-                                                                    #lbtot: total number of times a server was selected,  for newsessions, . The server counter is the number of times that server was selected which is the same of cumulative number of sessions 'stot' and 'connect'
-            if webserver['lbtot'] == 0:   # we have to wait again
-                for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                    if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']: # to get the correct container from podman
-                        c.stop()
-                        time.sleep(5)
-                        IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
-                        print('Container with IP',IPconts,'has been stopeed as its never been used for the last 2 minutes')
-                    perform_reset()
-                    break
+            # if webserver['status'] == 'DOWN': # restart if a container
+            #     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+            #         if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']:  # addr: address:port
+            #                 c.restart()
+            #                 time.sleep(5)
+            #                 IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+            #                 print('Container with IP',IPconts,'is being restarted')
+            #         perform_reset()
+            #         break
+            # #lbtot: total number of times a server was selected,  for newsessions, . The server counter is the number of times that server was selected which is the same of cumulative number of sessions 'stot' and 'connect'
+            # if webserver['lbtot'] == 0:   # we have to wait again
+            #     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
+            #         if c.status != 'running' & c.attrs['NetworkSettings']['Networks']['podman']['IPAddress'] == webserver['addr']: # to get the correct container from podman
+            #             c.stop()
+            #             time.sleep(5)
+            #             IPconts = c.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+            #             print('Container with IP',IPconts,'has been stopeed as its never been used for the last 2 minutes')
+            #         perform_reset()
+            #         break
 
         time.sleep(30)
 
