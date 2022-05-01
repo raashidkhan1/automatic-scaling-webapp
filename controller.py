@@ -181,6 +181,7 @@ def autoScaler(stats):
             #perform downscaling only when the available number of containers is more than 1
             if len(current_stats) > 1:
                 if int(webserver['qcur']) < MIN_QCUR:  # scale down if there are no requests in queue
+                    x = None
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
                         x = client.containers.get(c.name)
                         break
@@ -193,13 +194,13 @@ def autoScaler(stats):
                     break
 
                 if int(webserver['bin']) == 0 and int(webserver['bout']) == 0:  # scale down
+                    y = None
                     for c in client.containers.list(filters={'ancestor': 'testcontainer'}):
-                        x = client.containers.get(c.name)
-                        break
-                    if x.status == "running":
-                        x.stop()
+                        y = client.containers.get(c.name)
+                    if y.status == "running":
+                        y.stop()
                         Event.wait(2)
-                        IPconts = x.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
+                        IPconts = y.attrs['NetworkSettings']['Networks']['podman']['IPAddress']
                         print('bin is zero reached Scaling down', IPconts)
                     perform_reset()
                     break
